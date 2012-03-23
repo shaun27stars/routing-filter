@@ -81,7 +81,7 @@ module RoutingFilter
 
       def default_locale?(locale)
         locale && locale.to_sym == I18n.default_locale.to_sym
-      endb
+      end
 
       def prepend_locale?(locale)
         locale && (self.class.include_default_locale? || !default_locale?(locale))

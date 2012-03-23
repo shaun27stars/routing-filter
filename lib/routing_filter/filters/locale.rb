@@ -43,6 +43,14 @@ module RoutingFilter
       end
     end
 
+    attr_reader :exclude
+
+    def initialize(*args)
+      super
+      @exclude = options[:exclude]
+    end
+
+
     def around_recognize(path, env, &block)
       locale = extract_segment!(self.class.locales_pattern, path) # remove the locale from the beginning of the path
       yield.tap do |params|                                       # invoke the given block (calls more filters and finally routing)
@@ -52,17 +60,18 @@ module RoutingFilter
 
     def around_generate(*args, &block)
       params = args.extract_options!                              # this is because we might get a call like forum_topics_path(forum, topic, :locale => :en)
+      unless excluded?(params[:controller])
+        locale = params.delete(:locale)                             # extract the passed :locale option
+        locale = I18n.locale if locale.nil?                         # default to I18n.locale when locale is nil (could also be false)
+        locale = nil unless valid_locale?(locale)                   # reset to no locale when locale is not valid
 
-      locale = params.delete(:locale)                             # extract the passed :locale option
-      locale = I18n.locale if locale.nil?                         # default to I18n.locale when locale is nil (could also be false)
-      locale = nil unless valid_locale?(locale)                   # reset to no locale when locale is not valid
-
-      args << params
-
+        args << params
+      end
       yield.tap do |result|
-        prepend_segment!(result, locale) if prepend_locale?(locale)
+        prepend_segment!(result, locale) if prepend_locale?(locale) && !excluded?(result)
       end
     end
+
 
     protected
 
@@ -72,10 +81,20 @@ module RoutingFilter
 
       def default_locale?(locale)
         locale && locale.to_sym == I18n.default_locale.to_sym
-      end
+      endb
 
       def prepend_locale?(locale)
         locale && (self.class.include_default_locale? || !default_locale?(locale))
+      end
+
+      def excluded?(url)
+        url = url.first if url.is_a?(Array)
+        case exclude
+        when Regexp
+          url =~ exclude
+        when Proc
+          exclude.call(url)
+        end
       end
   end
 end
